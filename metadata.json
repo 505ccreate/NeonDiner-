@@ -1,0 +1,7 @@
+{
+  "name": "Neon-Noir Diner",
+  "description": "A futuristic diner with a voice-capable AI agent for taking orders.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
