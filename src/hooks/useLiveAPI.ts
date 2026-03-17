@@ -17,9 +17,20 @@ export function useLiveAPI(
   const nextPlayTimeRef = useRef<number>(0);
 
   const connect = useCallback(async () => {
+    // 1. Secure API Key retrieval for Vite environments
+    const API_KEY = import.meta.env.VITE_GOOGLE_AI_API_KEY || 
+                    import.meta.env.VITE_GEMINI_API_KEY || 
+                    (typeof process !== 'undefined' ? process.env.GEMINI_API_KEY : '');
+
+    if (!API_KEY) {
+      alert("API Key missing! Make sure VITE_GOOGLE_AI_API_KEY is in your .env file.");
+      return;
+    }
+
     if (sessionRef.current) return; // Prevent multiple connections
+
     try {
-      // Setup Audio Input (Microphone)
+      // 2. Setup Audio Input (Microphone)
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       
@@ -35,7 +46,7 @@ export function useLiveAPI(
       source.connect(processor);
       processor.connect(audioCtx.destination);
       
-      // Define Tools
+      // 3. Define Tools
       const addToCartDeclaration: FunctionDeclaration = {
         name: "addToCart",
         description: "Adds an item to the user's shopping cart.",
@@ -89,12 +100,12 @@ export function useLiveAPI(
         }
       };
 
-      // Instantiate inside connect to use the latest API key
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      // 4. Instantiate with the correct API_KEY variable
+      const ai = new GoogleGenAI({ apiKey: API_KEY });
 
-      // Connect to Live API
+      // 5. Connect to Live API
       const sessionPromise = ai.live.connect({
-        model: "gemini-2.5-flash-native-audio-preview-09-2025",
+        model: "gemini-2.0-flash-exp", // Updated to the most stable live audio model
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -108,7 +119,6 @@ export function useLiveAPI(
           onopen: () => {
             setConnected(true);
             
-            // Start sending audio
             processor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               const pcm16 = new Int16Array(inputData.length);
@@ -138,7 +148,6 @@ export function useLiveAPI(
             };
           },
           onmessage: async (message: LiveServerMessage) => {
-            // Handle Audio Output
             const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
             if (base64Audio && audioContextRef.current) {
               setIsSpeaking(true);
@@ -174,13 +183,11 @@ export function useLiveAPI(
               };
             }
             
-            // Handle Interruption
             if (message.serverContent?.interrupted) {
               nextPlayTimeRef.current = audioContextRef.current?.currentTime || 0;
               setIsSpeaking(false);
             }
             
-            // Handle Tool Calls
             if (message.toolCall) {
               const functionCalls = message.toolCall.functionCalls;
               if (functionCalls) {
@@ -247,7 +254,6 @@ export function useLiveAPI(
               }
             }
 
-            // Handle Transcription (moved back to onmessage)
             const serverContent = (message as any).serverContent;
             if (serverContent) {
               const transcriptionData = serverContent.inputTranscription || serverContent.transcription;
@@ -276,7 +282,7 @@ export function useLiveAPI(
     } catch (error) {
       console.error("Failed to connect:", error);
     }
-  }, [onAddToCart]);
+  }, [onAddToCart, onRemoveFromCart, onTriggerManagerAlert]);
 
   const disconnect = useCallback(() => {
     if (sessionRef.current) {
